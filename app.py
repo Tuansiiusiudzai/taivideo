@@ -80,6 +80,5 @@ def download():
         return {"error": f"Tải video thất bại: {str(e)}"}, 500
 
 if __name__ == "__main__":
-    # Sửa tại đây để Railway chạy đúng cổng
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
