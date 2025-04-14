@@ -3,7 +3,6 @@ import yt_dlp
 import uuid
 import os
 import tempfile
-import subprocess
 
 app = Flask(__name__)
 
@@ -23,7 +22,7 @@ HTML_TEMPLATE = """
       <option value="mp4">MP4 (video)</option>
       <option value="mp3">MP3 (âm thanh)</option>
     </select><br><br>
-    <button type="submit">Tải về</button>
+    <button type="submit">Tải video</button>
   </form>
 </body>
 </html>
@@ -35,88 +34,50 @@ def index():
 
 @app.route('/download')
 def download():
-    video_url = request.args.get('url')
-    fmt = request.args.get('format', 'mp4')
-
+    video_url = request.args.get("url")
+    fmt = request.args.get("format", "mp4")
     temp_dir = tempfile.gettempdir()
-    unique_id = uuid.uuid4().hex
-    raw_output_path = os.path.join(temp_dir, f"video_{unique_id}")
-    output_path = raw_output_path + f".{fmt}"
+    temp_id = uuid.uuid4().hex
 
-    if fmt == "mp3":
+    if fmt == "mp4":
         ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': raw_output_path,
+            'format': 'best[ext=mp4]',
+            'outtmpl': os.path.join(temp_dir, f"{temp_id}.mp4"),
             'quiet': True,
-            'noplaylist': True,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
         }
-    elif fmt == "mp4":
+        output_file = f"{temp_id}.mp4"
+    elif fmt == "mp3":
         ydl_opts = {
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            'outtmpl': output_path,
+            'format': 'bestaudio[ext=m4a]',
+            'outtmpl': os.path.join(temp_dir, f"{temp_id}.m4a"),
             'quiet': True,
-            'noplaylist': True,
-            'merge_output_format': 'mp4',
         }
+        output_file = f"{temp_id}.m4a"
     else:
-        return {"error": "Định dạng không được hỗ trợ"}, 400
+        return {"error": "Định dạng không hợp lệ"}, 400
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
 
-        # Nếu là mp3, tìm file .mp3 sinh ra thật
-        if fmt == "mp3":
-            mp3_path = None
-            for f in os.listdir(temp_dir):
-                if f.startswith(f"video_{unique_id}") and f.endswith(".mp3"):
-                    mp3_path = os.path.join(temp_dir, f)
-                    break
-            if not mp3_path:
-                raise Exception("Không tìm thấy file MP3 sau khi tải")
-            output_path = mp3_path
-
-        if not os.path.exists(output_path):
-            raise Exception("File không tồn tại sau khi tải.")
-
-        if fmt == "mp4" and not check_audio_in_video(output_path):
-            raise Exception("Video không có âm thanh.")
+        file_path = os.path.join(temp_dir, output_file)
 
         @after_this_request
         def cleanup(response):
             try:
-                os.remove(output_path)
-            except Exception as e:
-                print(f"Lỗi khi xóa file: {e}")
+                os.remove(file_path)
+            except:
+                pass
             return response
 
         return send_file(
-            output_path,
+            file_path,
             as_attachment=True,
-            download_name=os.path.basename(output_path),
+            download_name=output_file.replace(".m4a", ".mp3"),
             mimetype='application/octet-stream'
         )
-
     except Exception as e:
         return {"error": f"Tải video thất bại: {str(e)}"}, 500
 
-def check_audio_in_video(file_path):
-    try:
-        result = subprocess.run(
-            ['ffmpeg', '-i', file_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        return "Audio:" in result.stderr
-    except Exception as e:
-        print(f"Lỗi kiểm tra âm thanh: {e}")
-        return False
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
