@@ -3,6 +3,7 @@ import yt_dlp
 import uuid
 import os
 import tempfile
+import gunicorn
 
 app = Flask(__name__)
 
@@ -80,4 +81,6 @@ def download():
         return {"error": f"Tải video thất bại: {str(e)}"}, 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Sử dụng cổng mà Railway cung cấp
+    port = int(os.environ.get("PORT", 5000))  # Lấy cổng từ Railway (mặc định là 5000)
+    app.run(host="0.0.0.0", port=port, debug=True)
